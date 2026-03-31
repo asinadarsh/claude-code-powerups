@@ -23,7 +23,7 @@ cd claude-code-powerups
 .\install.ps1
 ```
 
-### Mac / Linux
+### Mac / Linux / Git Bash
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/claude-code-powerups.git
@@ -32,6 +32,8 @@ bash install.sh
 ```
 
 Then **restart Claude Code**.
+
+> **Note**: The installers automatically inject your full home directory path into `settings.json` so it works regardless of OS, username, or terminal.
 
 ---
 
@@ -54,18 +56,33 @@ Adds a live status bar to Claude Code showing:
 **Manual install** (if you prefer):
 
 1. Copy `statusline/statusline-simple.cjs` to `~/.claude/helpers/`
-2. Add to `~/.claude/settings.json`:
+2. Add to `~/.claude/settings.json` — use your **full absolute path** (not `~`):
+
+   **Mac / Linux**
    ```json
    {
      "statusLine": {
        "type": "command",
-       "command": "node ~/.claude/helpers/statusline-simple.cjs"
+       "command": "node /home/YOUR_USERNAME/.claude/helpers/statusline-simple.cjs"
      }
    }
    ```
+
+   **Windows** (forward slashes, full path)
+   ```json
+   {
+     "statusLine": {
+       "type": "command",
+       "command": "node C:/Users/YOUR_USERNAME/.claude/helpers/statusline-simple.cjs"
+     }
+   }
+   ```
+
 3. Restart Claude Code
 
-**Requirements**: Node.js (any recent version). No npm packages needed.
+> **Why absolute path?** Claude Code runs the statusline command through Git Bash on Windows, where `~` may not expand. Using the full path works on every OS and terminal.
+
+**Requirements**: Node.js 18+. No npm packages needed.
 
 ---
 

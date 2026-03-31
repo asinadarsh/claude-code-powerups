@@ -1,130 +1,121 @@
 # Claude Code Powerups - Windows Installer
-# Run from PowerShell: iex (iwr https://raw.githubusercontent.com/YOUR_USERNAME/claude-code-powerups/main/install.ps1).Content
-# Or locally: .\install.ps1
-
-param(
-  [switch]$Statusline,
-  [switch]$Memory,
-  [switch]$SessionAliases,
-  [switch]$All
-)
+# Run locally: .\install.ps1
+# Or one-liner: iex (iwr https://raw.githubusercontent.com/YOUR_USERNAME/claude-code-powerups/main/install.ps1).Content
 
 $ErrorActionPreference = "Stop"
 
-$HELPERS_DIR  = "$env:USERPROFILE\.claude\helpers"
-$MEMORY_DIR   = "$env:USERPROFILE\.claude\memory"
-$SETTINGS     = "$env:USERPROFILE\.claude\settings.json"
-$PS_PROFILE   = $PROFILE.CurrentUserAllHosts   # works for both PS5 + PS7
+$HOME_DIR     = $env:USERPROFILE
+$HELPERS_DIR  = "$HOME_DIR\.claude\helpers"
+$MEMORY_DIR   = "$HOME_DIR\.claude\memory"
+$SETTINGS     = "$HOME_DIR\.claude\settings.json"
+# Forward slashes — Git Bash (used by Claude Code on Windows) needs them
+$SCRIPT_PATH  = ($HELPERS_DIR -replace '\\','/') + "/statusline-simple.cjs"
 
-$GREEN  = "`e[32m"
-$CYAN   = "`e[36m"
-$YELLOW = "`e[33m"
-$RESET  = "`e[0m"
-
-function Log-Step($msg)    { Write-Host "$CYAN  → $msg$RESET" }
-function Log-Ok($msg)      { Write-Host "$GREEN  ✓ $msg$RESET" }
-function Log-Warn($msg)    { Write-Host "$YELLOW  ! $msg$RESET" }
+$GREEN  = "`e[32m"; $CYAN = "`e[36m"; $YELLOW = "`e[33m"; $RESET = "`e[0m"
+function Log-Step($m) { Write-Host "${CYAN}  → $m${RESET}" }
+function Log-Ok($m)   { Write-Host "${GREEN}  ✓ $m${RESET}" }
+function Log-Warn($m) { Write-Host "${YELLOW}  ! $m${RESET}" }
 
 Write-Host ""
-Write-Host "$CYAN  Claude Code Powerups — Installer$RESET"
-Write-Host "  ────────────────────────────────"
+Write-Host "${CYAN}  Claude Code Powerups${RESET}"
+Write-Host "  ─────────────────────"
 Write-Host ""
 
-# If no specific flags, install everything
-if (-not ($Statusline -or $Memory -or $SessionAliases)) { $All = $true }
+# ─── Prereqs ──────────────────────────────────────────────────────────────────
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  Write-Host "${YELLOW}  Node.js is required but not found.${RESET}"
+  Write-Host "  Install it from https://nodejs.org and re-run this script."
+  exit 1
+}
+Log-Ok "Node.js $(node --version) found"
 
-# ─── Ensure helpers dir ────────────────────────────────────────────────────────
+# ─── Create dirs ──────────────────────────────────────────────────────────────
 New-Item -ItemType Directory -Force -Path $HELPERS_DIR | Out-Null
+New-Item -ItemType Directory -Force -Path $MEMORY_DIR  | Out-Null
 
-# ─── STATUSLINE ────────────────────────────────────────────────────────────────
-if ($All -or $Statusline) {
-  Log-Step "Installing statusline..."
+# ─── Copy statusline script ───────────────────────────────────────────────────
+Log-Step "Installing statusline script..."
+$src = Join-Path $PSScriptRoot "statusline\statusline-simple.cjs"
+if (-not (Test-Path $src)) {
+  # When run via iex (remote), download the file
+  $raw = "https://raw.githubusercontent.com/YOUR_USERNAME/claude-code-powerups/main/statusline/statusline-simple.cjs"
+  Invoke-WebRequest -Uri $raw -OutFile "$HELPERS_DIR\statusline-simple.cjs"
+} else {
+  Copy-Item $src "$HELPERS_DIR\statusline-simple.cjs" -Force
+}
+Log-Ok "Copied statusline-simple.cjs"
 
-  $scriptSrc  = Join-Path $PSScriptRoot "statusline\statusline-simple.cjs"
-  $scriptDest = Join-Path $HELPERS_DIR  "statusline-simple.cjs"
+# ─── Patch settings.json with absolute path ───────────────────────────────────
+Log-Step "Configuring settings.json..."
 
-  if (Test-Path $scriptSrc) {
-    Copy-Item $scriptSrc $scriptDest -Force
-  } else {
-    Log-Warn "statusline-simple.cjs not found in repo — skipping copy"
-  }
+$statusLineConfig = [PSCustomObject]@{
+  type    = "command"
+  command = "node $SCRIPT_PATH"
+}
 
-  # Patch settings.json
-  if (Test-Path $SETTINGS) {
-    $json = Get-Content $SETTINGS -Raw | ConvertFrom-Json
-    if (-not $json.statusLine) {
-      $json | Add-Member -NotePropertyName "statusLine" -NotePropertyValue ([PSCustomObject]@{
-        type    = "command"
-        command = "node ~/.claude/helpers/statusline-simple.cjs"
-      }) -Force
+if (Test-Path $SETTINGS) {
+  $raw = Get-Content $SETTINGS -Raw
+  try   { $json = $raw | ConvertFrom-Json }
+  catch { Log-Warn "settings.json is invalid JSON — creating backup and resetting"; Copy-Item $SETTINGS "$SETTINGS.bak"; $json = [PSCustomObject]@{} }
+} else {
+  $json = [PSCustomObject]@{}
+}
+
+# Add or replace statusLine
+if ($json.PSObject.Properties['statusLine']) {
+  $json.statusLine = $statusLineConfig
+} else {
+  $json | Add-Member -NotePropertyName 'statusLine' -NotePropertyValue $statusLineConfig
+}
+
+$json | ConvertTo-Json -Depth 10 | Set-Content $SETTINGS -Encoding UTF8
+Log-Ok "settings.json updated (path: $SCRIPT_PATH)"
+
+# ─── Install memory templates ─────────────────────────────────────────────────
+Log-Step "Installing memory templates..."
+$templateDir = Join-Path $PSScriptRoot "memory\templates"
+if (Test-Path $templateDir) {
+  foreach ($f in Get-ChildItem $templateDir -File) {
+    $dest = Join-Path $MEMORY_DIR $f.Name
+    if (-not (Test-Path $dest)) {
+      Copy-Item $f.FullName $dest
+      Log-Ok "Created $($f.Name)"
     } else {
-      $json.statusLine.type    = "command"
-      $json.statusLine.command = "node ~/.claude/helpers/statusline-simple.cjs"
+      Log-Warn "Skipped $($f.Name) (already exists)"
     }
-    $json | ConvertTo-Json -Depth 10 | Set-Content $SETTINGS -Encoding UTF8
-    Log-Ok "settings.json updated with statusLine command"
+  }
+}
+
+# ─── Session alias helpers ────────────────────────────────────────────────────
+Log-Step "Adding session helpers to PowerShell profile..."
+$snippet = Join-Path $PSScriptRoot "session-aliases\powershell-snippet.ps1"
+if (Test-Path $snippet) {
+  $profilePath = $PROFILE.CurrentUserAllHosts
+  New-Item -ItemType File -Force -Path $profilePath | Out-Null
+  $profileContent = Get-Content $profilePath -Raw -ErrorAction SilentlyContinue
+  if ($profileContent -match "claude-sessions-helper") {
+    Log-Warn "Session helpers already in profile — skipping"
   } else {
-    # Create minimal settings.json
-    @{
-      statusLine = @{
-        type    = "command"
-        command = "node ~/.claude/helpers/statusline-simple.cjs"
-      }
-    } | ConvertTo-Json -Depth 5 | Set-Content $SETTINGS -Encoding UTF8
-    Log-Ok "settings.json created"
-  }
-
-  Log-Ok "Statusline installed → restart Claude Code to see it"
-}
-
-# ─── MEMORY TEMPLATES ──────────────────────────────────────────────────────────
-if ($All -or $Memory) {
-  Log-Step "Installing memory templates..."
-
-  New-Item -ItemType Directory -Force -Path $MEMORY_DIR | Out-Null
-
-  $templateSrc = Join-Path $PSScriptRoot "memory\templates"
-  if (Test-Path $templateSrc) {
-    foreach ($file in Get-ChildItem $templateSrc -File) {
-      $dest = Join-Path $MEMORY_DIR $file.Name
-      if (-not (Test-Path $dest)) {
-        Copy-Item $file.FullName $dest
-        Log-Ok "Created $($file.Name)"
-      } else {
-        Log-Warn "Skipped $($file.Name) — already exists"
-      }
-    }
-  }
-
-  Log-Ok "Memory templates ready at ~/.claude/memory/"
-}
-
-# ─── SESSION ALIASES ───────────────────────────────────────────────────────────
-if ($All -or $SessionAliases) {
-  Log-Step "Installing session alias helpers..."
-
-  $snippetFile = Join-Path $PSScriptRoot "session-aliases\powershell-snippet.ps1"
-  if (Test-Path $snippetFile) {
-    $snippet = Get-Content $snippetFile -Raw
-
-    # Check if already installed
-    $profileContent = if (Test-Path $PS_PROFILE) { Get-Content $PS_PROFILE -Raw } else { "" }
-    if ($profileContent -match "claude-sessions-helper") {
-      Log-Warn "Session alias helpers already in PowerShell profile — skipping"
-    } else {
-      Add-Content -Path $PS_PROFILE -Value "`n# ── Claude Code Session Helpers ──`n$snippet"
-      Log-Ok "Added session helper functions to $PS_PROFILE"
-      Log-Warn "Restart PowerShell or run: . `$PROFILE"
-    }
+    Add-Content $profilePath "`n# ── Claude Code Session Helpers ──"
+    Get-Content $snippet | Add-Content $profilePath
+    Log-Ok "Added to $profilePath"
   }
 }
 
-# ─── DONE ──────────────────────────────────────────────────────────────────────
+# ─── Verify script works ──────────────────────────────────────────────────────
+Log-Step "Testing statusline script..."
+$testJson = '{"model":{"display_name":"Sonnet"},"context_window":{"used_percentage":10},"cost":{"total_cost_usd":0.01}}'
+$result = $testJson | node "$HELPERS_DIR\statusline-simple.cjs" 2>&1
+if ($LASTEXITCODE -eq 0 -and $result) {
+  Log-Ok "Script test passed"
+} else {
+  Log-Warn "Script test produced no output — check Node.js installation"
+}
+
+# ─── Done ─────────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "$GREEN  Installation complete!$RESET"
+Write-Host "${GREEN}  Done! Restart Claude Code to see the statusline.${RESET}"
 Write-Host ""
-Write-Host "  Next steps:"
-Write-Host "  1. Restart Claude Code to apply statusline"
-Write-Host "  2. Run $CYAN  my-claude-sessions  $RESET to see your named sessions"
-Write-Host "  3. Edit $CYAN  ~/.claude/memory/user.md  $RESET with your profile"
+Write-Host "  It will appear at the bottom of the Claude Code UI showing:"
+Write-Host "  model name · context bar · token counts · session cost"
 Write-Host ""
