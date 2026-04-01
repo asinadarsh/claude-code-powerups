@@ -108,25 +108,29 @@ function linesSegment(added, removed) {
   return [a, r].filter(Boolean).join(' ');
 }
 
-/** Git branch — cached 5s to avoid lag */
-const GIT_CACHE = '/tmp/cc-statusline-git.cache';
+/** Git branch — cached 5s per directory to avoid lag */
 function gitSegment(cwd) {
   try {
-    const fs = require('fs');
-    const now = Date.now() / 1000;
-    let cached = null;
+    const fs   = require('fs');
+    const os   = require('os');
+    const path = require('path');
 
-    if (fs.existsSync(GIT_CACHE)) {
-      const age = now - fs.statSync(GIT_CACHE).mtimeMs / 1000;
-      if (age < 5) cached = fs.readFileSync(GIT_CACHE, 'utf8').trim();
+    // Unique cache file per working directory
+    const dirHash  = Buffer.from(cwd).toString('base64').replace(/[/+=]/g, '_').slice(0, 32);
+    const CACHE    = path.join(os.tmpdir(), `cc-git-${dirHash}.cache`);
+    const now      = Date.now() / 1000;
+    let   cached   = null;
+
+    if (fs.existsSync(CACHE)) {
+      const age = now - fs.statSync(CACHE).mtimeMs / 1000;
+      if (age < 5) cached = fs.readFileSync(CACHE, 'utf8').trim();
     }
 
     if (cached === null) {
-      // Check if inside a git repo; if not, write empty and skip
       const check = safeExec(`git -C "${cwd}" rev-parse --git-dir`);
-      if (!check) { fs.writeFileSync(GIT_CACHE, ''); return null; }
+      if (!check) { fs.writeFileSync(CACHE, ''); return null; }
       const branch = safeExec(`git -C "${cwd}" branch --show-current`);
-      fs.writeFileSync(GIT_CACHE, branch || '');
+      fs.writeFileSync(CACHE, branch || '');
       cached = branch;
     }
 
