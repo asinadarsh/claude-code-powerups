@@ -131,7 +131,7 @@ function gitSegment(cwd) {
     }
 
     if (!cached) return null;
-    return `${c.green}🌿 ${cached}${c.reset}`;
+    return `${c.green}\uF3ED ${cached}${c.reset}`;
   } catch { return null; }
 }
 
