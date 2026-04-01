@@ -4,34 +4,45 @@
  * Zero dependencies — pure Node.js built-ins only.
  *
  * Field reference: https://code.claude.com/docs/en/statusline
+ *
+ * Security: uses spawnSync with argument arrays throughout — no shell
+ * interpolation, no command injection possible via cwd or branch names.
  */
 
 'use strict';
 
-const { execSync } = require('child_process');
+const { spawnSync } = require('child_process');
+const fs            = require('fs');
+const os            = require('os');
+const path          = require('path');
 
+// ─── ANSI colors ──────────────────────────────────────────────────────────────
 const c = {
-  reset:   '\x1b[0m',
-  dim:     '\x1b[2m',
-  bold:    '\x1b[1m',
-  blink:   '\x1b[5m',
-  cyan:    '\x1b[36m',
-  green:   '\x1b[32m',
-  yellow:  '\x1b[33m',
-  red:     '\x1b[31m',
-  purple:  '\x1b[35m',
-  bgRed:   '\x1b[41m',
-  white:   '\x1b[37m',
+  reset:  '\x1b[0m',
+  dim:    '\x1b[2m',
+  bold:   '\x1b[1m',
+  blink:  '\x1b[5m',
+  cyan:   '\x1b[36m',
+  green:  '\x1b[32m',
+  yellow: '\x1b[33m',
+  red:    '\x1b[31m',
+  purple: '\x1b[35m',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function safeExec(cmd) {
+// ─── Safe git runner (spawnSync — no shell, no injection) ─────────────────────
+function git(args, cwd) {
   try {
-    return execSync(cmd, { encoding: 'utf8', timeout: 1500, stdio: ['pipe','pipe','pipe'] }).trim();
+    const r = spawnSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      timeout:  1500,
+      stdio:    ['pipe', 'pipe', 'pipe'],
+    });
+    return r.status === 0 ? (r.stdout || '').trim() : '';
   } catch { return ''; }
 }
 
+// ─── Format helpers ───────────────────────────────────────────────────────────
 function fmtTokens(n) {
   if (!n) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -48,27 +59,23 @@ function fmtCost(usd) {
 
 function fmtDuration(ms) {
   if (!ms) return null;
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
   if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
 }
 
 // ─── Segments ─────────────────────────────────────────────────────────────────
-
-function modelSegment(displayName) {
-  if (!displayName) return `◆ ${c.dim}—${c.reset}`;
-  const d = displayName.toLowerCase();
-  let color = c.cyan;
-  if (d.includes('opus'))       color = c.purple;
-  else if (d.includes('haiku')) color = c.green;
-  return `◆ ${color}${c.bold}${displayName}${c.reset}`;
+function modelSegment(name) {
+  if (!name) return `◆ ${c.dim}—${c.reset}`;
+  const d = name.toLowerCase();
+  const color = d.includes('opus') ? c.purple : d.includes('haiku') ? c.green : c.cyan;
+  return `◆ ${color}${c.bold}${name}${c.reset}`;
 }
 
-/** Context bar with label, %, and warning at 80%+ */
 function ctxSegment(pct) {
   if (pct == null) return `${c.dim}ctx —${c.reset}`;
   const n     = Math.round(pct);
@@ -78,7 +85,6 @@ function ctxSegment(pct) {
   return `${c.dim}ctx${c.reset} ${color}${bar} ${n}%${c.reset}`;
 }
 
-/** Token counts: ↑44k ↓8k */
 function tokenSegment(tokIn, tokOut) {
   if (tokIn == null && tokOut == null) return null;
   const parts = [
@@ -88,49 +94,50 @@ function tokenSegment(tokIn, tokOut) {
   return `${c.dim}${parts}${c.reset}`;
 }
 
-/** Session cost */
 function costSegment(usd) {
   const s = fmtCost(usd);
   return s ? `${c.yellow}${s}${c.reset}` : null;
 }
 
-/** Session duration */
 function durationSegment(ms) {
   const s = fmtDuration(ms);
   return s ? `${c.dim}⏱ ${s}${c.reset}` : null;
 }
 
-/** Lines added/removed this session */
 function linesSegment(added, removed) {
   if (!added && !removed) return null;
-  const a = added   ? `${c.green}+${added}${c.reset}`   : '';
+  const a = added   ? `${c.green}+${added}${c.reset}`  : '';
   const r = removed ? `${c.red}-${removed}${c.reset}` : '';
   return [a, r].filter(Boolean).join(' ');
 }
 
-/** Git branch — cached 5s per directory to avoid lag */
 function gitSegment(cwd) {
-  try {
-    const fs   = require('fs');
-    const os   = require('os');
-    const path = require('path');
+  // Validate cwd is a non-empty absolute path before any fs/shell use
+  if (!cwd || typeof cwd !== 'string' || !path.isAbsolute(cwd)) return null;
 
-    // Unique cache file per working directory
+  try {
+    // Per-directory cache file, kept inside os.tmpdir()
     const dirHash  = Buffer.from(cwd).toString('base64').replace(/[/+=]/g, '_').slice(0, 32);
     const CACHE    = path.join(os.tmpdir(), `cc-git-${dirHash}.cache`);
-    const now      = Date.now() / 1000;
-    let   cached   = null;
 
-    if (fs.existsSync(CACHE)) {
-      const age = now - fs.statSync(CACHE).mtimeMs / 1000;
-      if (age < 5) cached = fs.readFileSync(CACHE, 'utf8').trim();
-    }
+    // Ensure resolved path stays strictly within tmpdir (TOCTOU guard)
+    if (!path.resolve(CACHE).startsWith(path.resolve(os.tmpdir()))) return null;
+
+    const now = Date.now() / 1000;
+    let cached = null;
+
+    try {
+      const stat = fs.statSync(CACHE);
+      if ((now - stat.mtimeMs / 1000) < 5) {
+        cached = fs.readFileSync(CACHE, 'utf8').trim();
+      }
+    } catch { /* cache miss — will refresh below */ }
 
     if (cached === null) {
-      const check = safeExec(`git -C "${cwd}" rev-parse --git-dir`);
+      const check = git(['rev-parse', '--git-dir'], cwd);
       if (!check) { fs.writeFileSync(CACHE, ''); return null; }
-      const branch = safeExec(`git -C "${cwd}" branch --show-current`);
-      fs.writeFileSync(CACHE, branch || '');
+      const branch = git(['branch', '--show-current'], cwd);
+      fs.writeFileSync(CACHE, branch);
       cached = branch;
     }
 
@@ -139,7 +146,6 @@ function gitSegment(cwd) {
   } catch { return null; }
 }
 
-/** 5-hour rate limit bar — flashes red when ≥ 90% */
 function rateSegment(pct, resetsAt) {
   if (pct == null) return null;
   const n      = Math.round(pct);
@@ -148,13 +154,12 @@ function rateSegment(pct, resetsAt) {
 
   let resetStr = '';
   if (resetsAt) {
-    const secsLeft = Math.max(0, resetsAt - Math.floor(Date.now() / 1000));
-    const h = Math.floor(secsLeft / 3600);
-    const m = Math.floor((secsLeft % 3600) / 60);
+    const left = Math.max(0, resetsAt - Math.floor(Date.now() / 1000));
+    const h = Math.floor(left / 3600);
+    const m = Math.floor((left % 3600) / 60);
     resetStr = h > 0 ? ` resets ${h}h${m}m` : ` resets ${m}m`;
   }
 
-  // ≥ 90%: bold red + blink warning
   if (n >= 90) {
     return `${c.cyan}5h:${c.reset} ${c.bold}${c.red}${c.blink}⚠${c.reset} ${c.bold}${c.red}${bar} ${n}%${c.reset}${c.dim}${resetStr}${c.reset}`;
   }
@@ -163,7 +168,6 @@ function rateSegment(pct, resetsAt) {
 }
 
 // ─── Stdin ────────────────────────────────────────────────────────────────────
-
 function readStdin() {
   return new Promise((resolve) => {
     if (process.stdin.isTTY) return resolve('');
@@ -177,23 +181,29 @@ function readStdin() {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-
 async function main() {
   const raw = await readStdin();
-  let d = {};
-  if (raw) { try { d = JSON.parse(raw); } catch {} }
 
-  const model      = d.model?.display_name ?? null;
+  // Parse JSON safely — use Object.create(null) to avoid prototype pollution
+  let d = Object.create(null);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') Object.assign(d, parsed);
+    } catch { /* ignore malformed input */ }
+  }
+
+  const model      = d.model?.display_name      ?? null;
   const ctxPct     = d.context_window?.used_percentage ?? null;
-  const tokIn      = d.context_window?.total_input_tokens ?? null;
+  const tokIn      = d.context_window?.total_input_tokens  ?? null;
   const tokOut     = d.context_window?.total_output_tokens ?? null;
-  const cost       = d.cost?.total_cost_usd ?? null;
-  const durationMs = d.cost?.total_duration_ms ?? null;
-  const linesAdded = d.cost?.total_lines_added ?? null;
+  const cost       = d.cost?.total_cost_usd      ?? null;
+  const durationMs = d.cost?.total_duration_ms   ?? null;
+  const linesAdded = d.cost?.total_lines_added   ?? null;
   const linesRemov = d.cost?.total_lines_removed ?? null;
   const ratePct    = d.rate_limits?.five_hour?.used_percentage ?? null;
-  const rateReset  = d.rate_limits?.five_hour?.resets_at ?? null;
-  const cwd        = d.workspace?.current_dir ?? d.cwd ?? process.cwd();
+  const rateReset  = d.rate_limits?.five_hour?.resets_at       ?? null;
+  const cwd        = d.workspace?.current_dir ?? d.cwd ?? null;
 
   const sep = `${c.dim} │ ${c.reset}`;
 
@@ -213,7 +223,6 @@ async function main() {
     rateSegment(ratePct, rateReset),
   ].filter(Boolean).join(sep);
 
-  // If rate limit is critical (≥90%), prepend alert to line 1
   const rateCritical = ratePct != null && Math.round(ratePct) >= 90;
   const prefix = rateCritical ? `${c.bold}${c.red}⚡ RATE LIMIT CRITICAL${c.reset}${sep}` : '';
 
