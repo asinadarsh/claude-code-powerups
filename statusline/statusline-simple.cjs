@@ -191,28 +191,29 @@ async function main() {
   const rateReset  = d.rate_limits?.five_hour?.resets_at ?? null;
   const cwd        = d.workspace?.current_dir ?? d.cwd ?? process.cwd();
 
-  const sep   = `${c.dim} │ ${c.reset}`;
+  const sep = `${c.dim} │ ${c.reset}`;
 
-  const segments = [
+  // Line 1: session identity — model, branch, duration, lines changed
+  const line1 = [
     modelSegment(model),
+    gitSegment(cwd),
+    durationSegment(durationMs),
+    linesSegment(linesAdded, linesRemov),
+  ].filter(Boolean).join(sep);
+
+  // Line 2: usage & limits — ctx, tokens, cost, 5h rate limit
+  const line2 = [
     ctxSegment(ctxPct),
     tokenSegment(tokIn, tokOut),
     costSegment(cost),
-    durationSegment(durationMs),
-    linesSegment(linesAdded, linesRemov),
-    gitSegment(cwd),
     rateSegment(ratePct, rateReset),
-  ].filter(Boolean);
+  ].filter(Boolean).join(sep);
 
-  // If rate limit is critical (≥90%), prefix entire line with red alert
+  // If rate limit is critical (≥90%), prepend alert to line 1
   const rateCritical = ratePct != null && Math.round(ratePct) >= 90;
-  const line = segments.join(sep);
+  const prefix = rateCritical ? `${c.bold}${c.red}⚡ RATE LIMIT CRITICAL${c.reset}${sep}` : '';
 
-  if (rateCritical) {
-    process.stdout.write(`${c.bold}${c.red}⚡ RATE LIMIT CRITICAL${c.reset} ${sep} ${line}\n`);
-  } else {
-    process.stdout.write(line + '\n');
-  }
+  process.stdout.write(`${prefix}${line1}\n${line2}\n`);
 }
 
 main().catch(() => process.stdout.write('◆ Claude Code\n'));
