@@ -75,8 +75,7 @@ function ctxSegment(pct) {
   const color = n >= 80 ? c.red : n >= 50 ? c.yellow : c.green;
   const filled = Math.floor(n / 10);
   const bar    = '█'.repeat(filled) + '░'.repeat(10 - filled);
-  const warn   = n >= 80 ? ` ${c.bold}${c.red}⚠ compact soon${c.reset}` : '';
-  return `${c.dim}ctx${c.reset} ${color}${bar} ${n}%${c.reset}${warn}`;
+  return `${c.dim}ctx${c.reset} ${color}${bar} ${n}%${c.reset}`;
 }
 
 /** Token counts: ↑44k ↓8k */
