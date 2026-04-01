@@ -15,23 +15,31 @@ Practical enhancements for [Claude Code](https://claude.ai/code) that work out o
 
 ## Quick Install
 
-### Windows (PowerShell)
+### Windows — one-liner (PowerShell)
 
 ```powershell
-git clone https://github.com/asinadarsh/claude-code-powerups.git
-cd claude-code-powerups
-.\install.ps1
+iex (iwr https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/main/install.ps1).Content
 ```
 
-### Mac / Linux / Git Bash
+### Mac / Linux — one-liner
 
 ```bash
-git clone https://github.com/asinadarsh/claude-code-powerups.git
-cd claude-code-powerups
-bash install.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/main/install.sh)
 ```
 
 Then **restart Claude Code**.
+
+> **Or clone the repo first** if you prefer to inspect before running:
+> ```powershell
+> # Windows
+> git clone https://github.com/asinadarsh/claude-code-powerups.git
+> cd claude-code-powerups && .\install.ps1
+> ```
+> ```bash
+> # Mac / Linux
+> git clone https://github.com/asinadarsh/claude-code-powerups.git
+> cd claude-code-powerups && bash install.sh
+> ```
 
 > **Note**: The installers write your full absolute home path into `settings.json` automatically — works on any OS, username, or terminal.
 
