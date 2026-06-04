@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code Powerups - Mac / Linux / Git Bash Installer
 # Run locally:  bash install.sh
-# One-liner:    bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/claude-code-powerups/main/install.sh)
+# One-liner:    bash <(curl -fsSL https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/master/install.sh)
 
 set -euo pipefail
 
@@ -38,7 +38,7 @@ if [ -f "$LOCAL_SRC" ]; then
   cp "$LOCAL_SRC" "$SCRIPT_PATH"
 else
   # Remote install — download the file
-  RAW_URL="https://raw.githubusercontent.com/YOUR_USERNAME/claude-code-powerups/main/statusline/statusline-simple.cjs"
+  RAW_URL="https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/master/statusline/statusline-simple.cjs"
   if command -v curl &>/dev/null; then
     curl -fsSL "$RAW_URL" -o "$SCRIPT_PATH"
   elif command -v wget &>/dev/null; then

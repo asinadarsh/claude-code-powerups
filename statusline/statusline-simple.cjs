@@ -167,6 +167,30 @@ function rateSegment(pct, resetsAt) {
   return `${c.cyan}5h:${c.reset} ${color}${bar} ${n}%${c.reset}${c.dim}${resetStr}${c.reset}`;
 }
 
+function weeklySegment(pct, resetsAt) {
+  if (pct == null) return null;
+  const n      = Math.round(pct);
+  const filled = Math.floor(n / 10);
+  const bar    = '▪'.repeat(filled) + '·'.repeat(10 - filled);
+
+  let resetStr = '';
+  if (resetsAt) {
+    const left = Math.max(0, resetsAt - Math.floor(Date.now() / 1000));
+    const d = Math.floor(left / 86400);
+    const h = Math.floor((left % 86400) / 3600);
+    const m = Math.floor((left % 3600) / 60);
+    if (d > 0)      resetStr = ` resets ${d}d ${h}h`;
+    else if (h > 0) resetStr = ` resets ${h}h${m}m`;
+    else            resetStr = ` resets ${m}m`;
+  }
+
+  if (n >= 90) {
+    return `${c.cyan}wk:${c.reset} ${c.bold}${c.red}${c.blink}⚠${c.reset} ${c.bold}${c.red}${bar} ${n}%${c.reset}${c.dim}${resetStr}${c.reset}`;
+  }
+  const color = n >= 70 ? c.yellow : c.green;
+  return `${c.cyan}wk:${c.reset} ${color}${bar} ${n}%${c.reset}${c.dim}${resetStr}${c.reset}`;
+}
+
 // ─── Stdin ────────────────────────────────────────────────────────────────────
 function readStdin() {
   return new Promise((resolve) => {
@@ -203,6 +227,8 @@ async function main() {
   const linesRemov = d.cost?.total_lines_removed ?? null;
   const ratePct    = d.rate_limits?.five_hour?.used_percentage ?? null;
   const rateReset  = d.rate_limits?.five_hour?.resets_at       ?? null;
+  const weeklyPct  = d.rate_limits?.weekly?.used_percentage    ?? null;
+  const weeklyReset = d.rate_limits?.weekly?.resets_at         ?? null;
   const cwd        = d.workspace?.current_dir ?? d.cwd ?? null;
 
   const sep = `${c.dim} │ ${c.reset}`;
@@ -215,15 +241,17 @@ async function main() {
     linesSegment(linesAdded, linesRemov),
   ].filter(Boolean).join(sep);
 
-  // Line 2: usage & limits — ctx, tokens, cost, 5h rate limit
+  // Line 2: usage & limits — ctx, tokens, cost, 5h rate limit, weekly limit
   const line2 = [
     ctxSegment(ctxPct),
     tokenSegment(tokIn, tokOut),
     costSegment(cost),
     rateSegment(ratePct, rateReset),
+    weeklySegment(weeklyPct, weeklyReset),
   ].filter(Boolean).join(sep);
 
-  const rateCritical = ratePct != null && Math.round(ratePct) >= 90;
+  const rateCritical = (ratePct != null && Math.round(ratePct) >= 90) ||
+                       (weeklyPct != null && Math.round(weeklyPct) >= 90);
   const prefix = rateCritical ? `${c.bold}${c.red}⚡ RATE LIMIT CRITICAL${c.reset}${sep}` : '';
 
   process.stdout.write(`${prefix}${line1}\n${line2}\n`);

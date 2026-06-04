@@ -1,5 +1,5 @@
 # Claude Code Powerups - Windows Installer
-# One-liner: iex (iwr https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/main/install.ps1).Content
+# One-liner: iex (iwr https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/master/install.ps1).Content
 # Or clone:  git clone https://github.com/asinadarsh/claude-code-powerups && cd claude-code-powerups && .\install.ps1
 
 $ErrorActionPreference = "Stop"
@@ -37,7 +37,7 @@ $scriptSrc  = Join-Path $PSScriptRoot "statusline\statusline-simple.cjs"
 if (Test-Path $scriptSrc) {
     Copy-Item $scriptSrc $scriptDest -Force
 } else {
-    $url = "https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/main/statusline/statusline-simple.cjs"
+    $url = "https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/master/statusline/statusline-simple.cjs"
     Invoke-WebRequest -Uri $url -OutFile $scriptDest -UseBasicParsing
 }
 Log-Ok "Copied statusline-simple.cjs"

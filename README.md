@@ -18,13 +18,13 @@ Practical enhancements for [Claude Code](https://claude.ai/code) that work out o
 ### Windows — one-liner (PowerShell)
 
 ```powershell
-iex (iwr https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/main/install.ps1).Content
+iex (iwr https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/master/install.ps1).Content
 ```
 
 ### Mac / Linux — one-liner
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/asinadarsh/claude-code-powerups/master/install.sh)
 ```
 
 Then **restart Claude Code**.
@@ -53,7 +53,7 @@ A live 2-line status bar at the bottom of Claude Code. Updates after every respo
 
 ```
 ◆ Sonnet  │  git: main  │  ⏱ 32m 10s  │  +156 -23
-ctx ██░░░░░░░░ 22%  │  ↑44k ↓8k  │  $0.18  │  5h: ▪▪▪▪·· 45% resets 2h0m
+ctx ██░░░░░░░░ 22%  │  ↑44k ↓8k  │  $0.18  │  5h: ▪▪▪▪·· 45% resets 2h0m  │  wk: ▪▪░░░░░░░░ 20% resets 3d 4h
 ```
 
 #### Line 1 — Session info
@@ -73,6 +73,7 @@ ctx ██░░░░░░░░ 22%  │  ↑44k ↓8k  │  $0.18  │  5h: 
 | `↑44k ↓8k` | `↑166k ↓21k` | Tokens sent to Claude (↑ input) and received back (↓ output) this session |
 | `$0.18` | `$2.40` | Total API cost for this session in USD |
 | `5h: ▪▪▪▪·· 45% resets 2h0m` | `5h: ▪▪▪▪▪▪▪▪▪· 92%` | Your 5-hour Claude rate limit window. Green → Yellow at 70% → Red at 90%. Shows time until the window resets. Only visible on Claude Pro/Max plans |
+| `wk: ▪▪░░░░░░░░ 20% resets 3d 4h` | `wk: ▪▪▪▪▪▪▪▪▪· 91%` | Your weekly Claude usage. Same color scale as 5h. Reset time shown in days/hours. Only visible on Claude Max plans |
 
 #### Rate limit alert
 
