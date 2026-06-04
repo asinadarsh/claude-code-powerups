@@ -227,8 +227,8 @@ async function main() {
   const linesRemov = d.cost?.total_lines_removed ?? null;
   const ratePct    = d.rate_limits?.five_hour?.used_percentage ?? null;
   const rateReset  = d.rate_limits?.five_hour?.resets_at       ?? null;
-  const weeklyPct  = d.rate_limits?.weekly?.used_percentage    ?? null;
-  const weeklyReset = d.rate_limits?.weekly?.resets_at         ?? null;
+  const weeklyPct  = d.rate_limits?.seven_day?.used_percentage ?? null;
+  const weeklyReset = d.rate_limits?.seven_day?.resets_at      ?? null;
   const cwd        = d.workspace?.current_dir ?? d.cwd ?? null;
 
   const sep = `${c.dim} │ ${c.reset}`;
