@@ -241,20 +241,23 @@ async function main() {
     linesSegment(linesAdded, linesRemov),
   ].filter(Boolean).join(sep);
 
-  // Line 2: usage & limits — ctx, tokens, cost, 5h rate limit, weekly limit
+  // Line 2: usage & limits — ctx, tokens, cost, 5h rate limit
   const line2 = [
     ctxSegment(ctxPct),
     tokenSegment(tokIn, tokOut),
     costSegment(cost),
     rateSegment(ratePct, rateReset),
-    weeklySegment(weeklyPct, weeklyReset),
   ].filter(Boolean).join(sep);
+
+  // Line 3: weekly usage
+  const line3 = weeklySegment(weeklyPct, weeklyReset);
 
   const rateCritical = (ratePct != null && Math.round(ratePct) >= 90) ||
                        (weeklyPct != null && Math.round(weeklyPct) >= 90);
   const prefix = rateCritical ? `${c.bold}${c.red}⚡ RATE LIMIT CRITICAL${c.reset}${sep}` : '';
 
-  process.stdout.write(`${prefix}${line1}\n${line2}\n`);
+  const output = [prefix + line1, line2, line3].filter(Boolean).join('\n');
+  process.stdout.write(`${output}\n`);
 }
 
 main().catch(() => process.stdout.write('◆ Claude Code\n'));
